@@ -1,0 +1,41 @@
+{
+  "sessions": 16,
+  "usable_days": 16,
+  "excluded_days": {
+    "mixed_condition": 0,
+    "no_condition": 0,
+    "too_short": 0
+  },
+  "per_condition": {
+    "phone_away": {
+      "days": 8,
+      "mean_distractions_per_hour": 1.91
+    },
+    "phone_desk": {
+      "days": 8,
+      "mean_distractions_per_hour": 5.59
+    }
+  },
+  "comparison": {
+    "label": "EXPLORATORY",
+    "unit": "study day",
+    "a": "phone_away",
+    "b": "phone_desk",
+    "mean_diff_a_minus_b": -3.68,
+    "p_value": 0.0002,
+    "method": "exact"
+  },
+  "caveats": [
+    "Self-tracking with one person: results may not generalize and may not be causal.",
+    "Unless days were assigned by a protocol made BEFORE starting, differences can come from exam weeks, sleep, subject difficulty or mood.",
+    "Distraction counts are self-reported by tapping, so they depend on noticing and honesty.",
+    "A p-value here is not proof; it only says the gap is unusual if conditions were interchangeable."
+  ],
+  "adherence": {
+    "planned_days": 16,
+    "usable_days_matching_plan": 16,
+    "usable_days_not_matching_plan": [],
+    "planned_days_without_usable_data": 0
+  },
+  "unreadable_rows": 0
+}
