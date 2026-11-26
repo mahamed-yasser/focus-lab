@@ -1,0 +1,135 @@
+<!doctype html><meta charset="utf-8"><body><pre id="result">pending</pre>
+<iframe id="f" src="index.html" width="500" height="900"></iframe><iframe id="g" width="500" height="900"></iframe>
+<script>
+var R = [];
+function ok(n, c) { R.push((c ? "PASS " : "FAIL ") + n); }
+function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function load(fr, url) { return new Promise(function (res) { fr.onload = function () { res(fr.contentWindow); }; if (url) fr.src = url; else fr.contentWindow.location.reload(); }); }
+function $(w, id) { return w.document.getElementById(id); }
+var KEY = "focuslog.sessions.v1", AKEY = "focuslog.active.v1";
+function sess(w) { var r = w.localStorage.getItem(KEY); return r ? JSON.parse(r).sessions : []; }
+function keys(w, p) { return Object.keys(w.localStorage).filter(function (k) { return k.indexOf(p) === 0; }); }
+(async function () {
+  try {
+    var f = document.getElementById("f"), g = document.getElementById("g");
+    var w = await load(f); w.localStorage.clear(); w = await load(f);
+
+    // 1. normal flow with a user-typed condition, goal dialog (non-blocking), park list
+    $(w, "subject").value = "تكامل"; $(w, "goal").value = "10 مسائل"; $(w, "cond").value = "برا الأوضة";
+    $(w, "start").click();
+    ok("running panel shown", !$(w, "running").hidden && $(w, "setup").hidden);
+    var chips = w.document.querySelectorAll(".chip"); chips[1].click(); chips[1].click(); chips[4].click();
+    ok("distraction count 3", $(w, "dcount").textContent === "3");
+    $(w, "park").value = "فيديو صاحبي"; $(w, "parkbtn").click();
+    ok("parked listed", $(w, "parked-list").textContent.indexOf("فيديو") >= 0);
+    // 2. second tab cannot start or take over a live session
+    var w2 = await load(g, "index.html");
+    ok("second tab told a session is running", !$(w2, "msg").hidden && $(w2, "msg").textContent.indexOf("تبويب تاني") >= 0);
+    $(w2, "start").click();
+    ok("second tab refuses to start", $(w2, "running").hidden);
+    // 3. double click on finish saves once; goal dialog is an in-page element
+    $(w, "stop").click(); $(w, "stop").click();
+    await wait(100);
+    ok("goal dialog shown in page", !$(w, "dlg").hidden);
+    $(w, "dlg-yes").click(); await wait(200);
+    var s = sess(w);
+    ok("exactly one session after double stop", s.length === 1);
+    ok("fields incl. free-text condition", s[0].subject === "تكامل" && s[0].distractions === 3 && s[0].goalDone === true && s[0].parked[0] === "فيديو صاحبي" && s[0].condition === "برا الأوضة");
+    ok("active session cleared", w.localStorage.getItem(AKEY) === null);
+    ok("summary + unverified stat rendered", $(w, "s-n").textContent === "1" && $(w, "s-unver").textContent === "0");
+
+    // 4. a second tab that lost ownership must not save
+    $(w, "goal").value = ""; $(w, "start").click();
+    var a = JSON.parse(w.localStorage.getItem(AKEY)); a.owner = "someone-else"; w.localStorage.setItem(AKEY, JSON.stringify(a));
+    await wait(1200);
+    ok("tab that lost ownership stops, saves nothing", $(w, "running").hidden && sess(w).length === 1);
+    w.localStorage.removeItem(AKEY);
+
+    // 5. repeated reloads of the same corrupt data keep one bounded copy; different corrupt data stays at most 3
+    w.localStorage.setItem(KEY, "{broken");
+    for (var i = 0; i < 5; i++) { w = await load(f); w.localStorage.setItem(KEY, "{broken"); }
+    ok("same corrupt data: one copy only", keys(w, KEY + ".corrupt.").length === 1);
+    for (i = 0; i < 6; i++) { w.localStorage.setItem(KEY, "{broken" + i); w = await load(f); }
+    ok("many different corrupt copies capped at 3", keys(w, KEY + ".corrupt.").length === 3);
+    ok("user told about corruption", !$(w, "msg").hidden);
+
+    // 6. clear all is recoverable
+    w.localStorage.clear(); w = await load(f);
+    var rec = { date: "2026-11-20", start: "10:00", subject: "فيزياء", condition: "", plannedMin: 25, actualMin: 20, unverifiedMin: 0, distractions: 1, triggers: [], goal: "", goalDone: false, parked: [], note: "" };
+    w.localStorage.setItem(KEY, JSON.stringify({ version: 2, sessions: [rec] })); w = await load(f);
+    $(w, "clear").click(); await wait(100); $(w, "dlg-yes").click(); await wait(200);
+    ok("cleared", sess(w).length === 0 && !$(w, "restore").hidden);
+    $(w, "restore").click(); await wait(200);
+    ok("restore brings sessions back", sess(w).length === 1 && sess(w)[0].subject === "فيزياء");
+
+    // 7. killed-tab recovery: elapsed gap saved as UNVERIFIED, tracked minutes stay tracked
+    var now = Date.now();
+    w.localStorage.setItem(AKEY, JSON.stringify({ v: 1, startAt: now - 7200000, last: now - 3600000, activeMs: 300000, awayMs: 0, planned: 5, subject: "كيمياء", cond: "", goal: "", distractions: 2, triggers: ["إشعار", "إشعار"], parked: [], note: "" }));
+    w = await load(f);
+    var k = sess(w).filter(function (x) { return x.subject === "كيمياء"; })[0];
+    ok("recovered session saved with tracked=5", !!k && k.actualMin === 5);
+    ok("gap recorded as unverified (~60 min), not as tracked", k.unverifiedMin >= 59 && k.unverifiedMin <= 61);
+    ok("active cleared after recovery", w.localStorage.getItem(AKEY) === null);
+
+    // 8. future schema never overwritten
+    var fut = '{"version":9,"sessions":[]}'; w.localStorage.setItem(KEY, fut); w = await load(f);
+    $(w, "clear").click(); await wait(100);
+    ok("future data untouched", w.localStorage.getItem(KEY) === fut);
+
+    // 9. narrow screen + long unbroken subject, dialog keyboard behaviour, safety-copy download button
+    f.width = 320; w = await load(f); w.localStorage.clear(); w = await load(f);
+    var longSubj = new Array(41).join("x");
+    var rec = { id: "L1", date: "2026-11-20", subject: longSubj, plannedMin: 25, actualMin: 25, unverifiedMin: 0, distractions: 0, triggers: [], parked: [], goal: "", goalDone: false, condition: "", start: "10:00" };
+    w.localStorage.setItem(KEY, JSON.stringify({ version: 2, sessions: [rec] })); w = await load(f);
+    var de = w.document.documentElement;
+    ok("long 40-char subject: no horizontal overflow at 320px (rows=" + w.document.querySelectorAll("#rows tr").length + ")", w.document.querySelectorAll("#rows tr").length === 1 && de.scrollWidth <= 320);
+    $(w, "subject").value = longSubj; $(w, "goal").value = longSubj + longSubj; $(w, "start").click();
+    ok("long goal while running: no overflow at 320px", de.scrollWidth <= 320);
+    w.document.getElementById("discard").focus(); $(w, "discard").click(); await wait(100);
+    ok("discard dialog opens", !$(w, "dlg").hidden && w.document.activeElement.id === "dlg-yes");
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })); 
+    ok("Tab moves inside dialog", w.document.activeElement.id === "dlg-no");
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    ok("Tab wraps back, never leaves dialog", w.document.activeElement.id === "dlg-yes");
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await wait(100);
+    ok("Escape closes = safe answer, session kept", $(w, "dlg").hidden && w.localStorage.getItem(AKEY) !== null);
+    ok("focus returned to the button that opened the dialog", w.document.activeElement.id === "discard");
+    ok("no safety copies yet: download button hidden", $(w, "savecopies").hidden);
+    $(w, "stop").click(); await wait(100); $(w, "dlg-no").click(); await wait(100);
+    w.localStorage.setItem(KEY, "{broken"); w = await load(f);
+    ok("after corrupt data the download-copies button is visible", !$(w, "savecopies").hidden);
+
+    // 10. Escape on the resume dialog changes nothing; Escape on the goal dialog keeps the session running
+    w.localStorage.clear(); var t0 = Date.now();
+    w.localStorage.setItem(AKEY, JSON.stringify({ v: 1, startAt: t0 - 900000, last: t0 - 60000, activeMs: 300000, awayMs: 0, planned: 60, subject: "أحياء", cond: "", goal: "", distractions: 0, triggers: [], parked: [], note: "" }));
+    w = await load(f);
+    ok("resume dialog is shown", !$(w, "dlg").hidden);
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await wait(150);
+    ok("Escape on resume: nothing saved, draft kept, not running", $(w, "dlg").hidden && sess(w).length === 0 && w.localStorage.getItem(AKEY) !== null && $(w, "running").hidden);
+    w.localStorage.clear(); w = await load(f);
+    $(w, "subject").value = "كيمياء"; $(w, "goal").value = "هدف"; $(w, "start").click(); $(w, "stop").click(); await wait(100);
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await wait(150);
+    ok("Escape on goal dialog: session still running, nothing saved", $(w, "dlg").hidden && !$(w, "running").hidden && sess(w).length === 0);
+    $(w, "stop").click(); await wait(100); $(w, "dlg-yes").click(); await wait(200);
+    ok("session can still be finished afterwards (1 saved)", sess(w).length === 1);
+
+    // 11. weekly report inside FocusLog (this week, previous week, targets from WeekPlan storage)
+    w.localStorage.clear(); w = await load(f);
+    var today = new Date(), pad = function (n) { return (n < 10 ? "0" : "") + n; }, dk = today.getFullYear() + "-" + pad(today.getMonth() + 1) + "-" + pad(today.getDate());
+    var r1 = { date: dk, start: "09:00", subject: "تفاضل", condition: "", plannedMin: 30, actualMin: 40, unverifiedMin: 10, distractions: 2, triggers: ["تيك توك"], goal: "x", goalDone: true, parked: [], note: "" };
+    w.localStorage.setItem(KEY, JSON.stringify({ version: 2, sessions: [r1] }));
+    w.localStorage.setItem("weekplan.targets.v1", JSON.stringify({ "تفاضل": 120 })); w = await load(f);
+    var body = $(w, "rep-body").textContent;
+    ok("report shows totals incl. unverified separately", body.indexOf("1 جلسة") >= 0 && body.indexOf("40 دقيقة متتبعة") >= 0 && body.indexOf("10 غير متحقق") >= 0);
+    ok("report shows time-of-day + subject + WeekPlan target rows", body.indexOf("الصبح") >= 0 && body.indexOf("تفاضل") >= 0 && body.indexOf("33%") >= 0);
+    $(w, "rep-prev").click(); ok("previous week is empty", $(w, "rep-body").textContent.indexOf("مفيش جلسات") >= 0);
+    $(w, "rep-next").click(); ok("next navigation returns to this week", $(w, "rep-body").textContent.indexOf("1 جلسة") >= 0);
+    w.localStorage.setItem("weekplan.imported.v1", JSON.stringify({ version: 2, sessions: [Object.assign({}, r1, { actualMin: 41 })] })); w = await load(f);
+    ok("edited imported copy of a saved session: not doubled, warning shown", $(w, "rep-body").textContent.indexOf("1 جلسة") >= 0 && $(w, "rep-body").textContent.indexOf("40 دقيقة متتبعة") >= 0 && $(w, "rep-body").textContent.indexOf("تنبيه") >= 0);
+    w.localStorage.removeItem("weekplan.imported.v1");
+    ok("report: no horizontal overflow at 500px", w.document.documentElement.scrollWidth <= 500);
+    f.width = 500;
+    document.getElementById("result").textContent = R.join("\n");
+  } catch (e) { document.getElementById("result").textContent = "ERROR " + e + "\n" + R.join("\n"); }
+})();
+</script>

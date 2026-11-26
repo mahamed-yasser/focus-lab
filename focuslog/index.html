@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FocusLog | سجل التركيز</title>
+<link rel="stylesheet" href="../theme.css">
+<style>
+  #rows td:first-child { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  th:first-child:has(+ th + th + th) { width:36%; }
+  /* layout v2: three views on phones (bottom tabs), real two-column dashboard on desktop */
+  main { padding-bottom: 96px; }
+  .view { display:none; }
+  body[data-view="today"] #v-today, body[data-view="report"] #v-report, body[data-view="log"] #v-log { display:block; }
+  .tabs { position:fixed; inset:auto 0 0 0; z-index:5; display:flex; gap:6px; padding:8px 12px calc(8px + env(safe-area-inset-bottom)); background:#0b1220ee; backdrop-filter:blur(10px); border-top:1px solid var(--line); justify-content:center; }
+  .tab { flex:1; max-width:200px; background:transparent; color:var(--mute); border:1px solid transparent; font-weight:700; }
+  .tab[aria-current="page"] { background:var(--card2); color:var(--acc); border-color:var(--line); }
+  #rep-body tbody tr.bar td:nth-child(2) { background:linear-gradient(to left, #34d39940 var(--w,0%), transparent var(--w,0%)); }
+  @media (min-width: 900px) {
+    main { max-width: 1080px; padding-bottom:48px; }
+    .tabs { display:none; }
+    .view { display:block !important; }
+    .today-grid { display:grid; grid-template-columns: minmax(0,5fr) minmax(0,6fr); gap:20px; align-items:start; }
+    #v-report, #v-log { margin-top:4px; }
+    #v-report #rep-body { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:28px; }
+    #v-report #rep-body > p, #v-report #rep-body > .mute { grid-column:1 / -1; }
+    .stats { grid-template-columns:repeat(2,1fr); }
+    .stat { grid-column:auto; }
+    .stat:nth-child(n+4) { grid-column:auto; }
+    .stat:last-child { grid-column:1 / -1; }
+  }
+  .unv { display:block; font-size:.72rem; color:var(--warn); font-weight:500; line-height:1.3; }
+  #setup .row > div { flex-basis:100%; }
+  @media (max-height:520px) { .tabs { position:static; } main { padding-bottom:24px; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="top"><h1>سجل التركيز <span class="mute">FocusLog</span></h1><span class="tag">محلي على جهازك</span></header>
+
+  <div id="msg" role="status" aria-live="polite" class="card" hidden></div>
+
+<div class="view" data-view="today" id="v-today">
+  <div class="today-grid">
+  <div class="col-a">
+  <section class="card" id="setup">
+    <label for="subject">المادة</label>
+    <input id="subject" placeholder="مثال: تفاضل وتكامل" maxlength="40">
+    <div class="row">
+      <div><label for="planned">المدة (دقائق)</label><input id="planned" type="number" min="5" max="120" value="25"></div>
+      <div><label for="cond">ظرف الجلسة (اختياري، اكتبه بنفسك)</label>
+        <input id="cond" list="conds" maxlength="30" placeholder="مثال: على المكتب / برا الأوضة">
+        <datalist id="conds"></datalist>
+      </div>
+    </div>
+    <label for="goal">هدف الجلسة (اختياري)</label>
+    <input id="goal" placeholder="مثال: أحل 10 مسائل تكامل" maxlength="80">
+    <p style="margin-top:14px"><button id="start">ابدأ الجلسة</button></p>
+  </section>
+
+  <section class="card" id="running" hidden>
+    <div id="clock">25:00</div>
+    <p class="mute" style="text-align:center">لما تتشتت، اضغط السبب بسرعة وارجع للمذاكرة.</p>
+    <div class="chips" id="trigs"></div>
+    <p>التشتت: <strong id="dcount">0</strong></p>
+    <label for="park">عايز تفتح حاجة؟ اكتبها هنا وهتشوفها في الاستراحة</label>
+    <div class="row"><input id="park" maxlength="60" placeholder="مثال: فيديو صاحبي"><button class="sec" id="parkbtn" style="flex:0 0 auto">أجّل</button></div>
+    <p class="mute" id="parked-list" aria-live="polite"></p>
+    <div class="row">
+      <button class="warn" id="stop">أنهي وسجّل</button>
+      <button class="sec" id="discard">إلغاء بدون حفظ</button>
+    </div>
+  </section>
+
+  </div>
+  <div class="col-b">
+  <section class="card" aria-label="ملخص">
+    <h2>ملخصك</h2>
+    <div class="stats">
+    <div class="stat"><span>جلسات</span><strong id="s-n">0</strong></div>
+    <div class="stat"><span>دقائق متتبعة اليوم</span><strong id="s-today">0</strong></div>
+    <div class="stat"><span>إجمالي الدقائق المتتبعة</span><strong id="s-total">0</strong></div>
+    <div class="stat"><span>دقائق غير متحقق منها</span><strong id="s-unver">0</strong></div>
+    <div class="stat"><span>تشتت في الساعة المتتبعة</span><strong id="s-rate">0</strong></div>
+    </div>
+    <div id="s-trig" class="mute"></div>
+    <p class="mute">"متتبعة" يعني الصفحة كانت شغالة وبتعدّ. لو الموبايل نام أو التبويب اتوقف، الوقت ده بيتسجل "غير متحقق منه": ممكن تكون ذاكرت فيه فعلًا، بس التطبيق مش شايف. التطبيق مش بيثبت إنك كنت مركّز.</p>
+  </section>
+
+  </div></div>
+</div>
+<div class="view" data-view="report" id="v-report">
+  <section class="card" id="report" aria-label="تقرير الأسبوع">
+    <h2>تقرير الأسبوع</h2>
+    <div class="row"><button class="sec" id="rep-prev">الأسبوع اللي قبله</button><button class="sec" id="rep-next">الأسبوع اللي بعده</button></div>
+    <p class="mute" id="rep-range" style="direction:ltr;text-align:center"></p>
+    <div id="rep-body"></div>
+  </section>
+
+</div>
+<div class="view" data-view="log" id="v-log">
+  <section class="card">
+    <h2>سجل الجلسات</h2>
+    <table><thead><tr><th>التاريخ</th><th>المادة</th><th>دقائق متتبعة</th><th>تشتت</th></tr></thead><tbody id="rows"></tbody></table>
+        <div class="actions">
+      <button class="sec" id="export">تصدير CSV</button>
+      <button class="sec" id="import">استيراد CSV</button>
+      <input type="file" id="file" accept=".csv,text/csv" hidden>
+      <button class="sec" id="clear">مسح كل البيانات</button>
+      <button class="sec" id="restore" hidden>استرجاع آخر مسح</button>
+      <button class="sec" id="savecopies" hidden>تنزيل النسخ الاحتياطية (بيانات تالفة)</button>
+    </div>
+    <p class="mute">البيانات محفوظة في المتصفح على جهازك فقط. التصدير بينزل ملف للاستخدام مع أداة SelfTest.</p>
+  </section>
+</div>
+</main>
+<nav class="tabs" aria-label="التنقل"><button type="button" class="tab" data-go="today" aria-current="page">اليوم</button><button type="button" class="tab" data-go="report">التقرير</button><button type="button" class="tab" data-go="log">السجل</button></nav>
+<div id="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="dlg-text">
+  <div class="box"><p id="dlg-text"></p>
+    <div class="row"><button id="dlg-yes">تمام</button><button class="sec" id="dlg-no">لأ</button></div></div>
+</div>
+<script src="core.js"></script>
+<script src="../weekplan/plan.js"></script>
+<script src="app.js"></script>
+<script>
+(function(){
+  var b=document.body, tabs=document.querySelectorAll(".tab");
+  function go(v){ b.setAttribute("data-view",v); tabs.forEach(function(t){ if(t.getAttribute("data-go")===v) t.setAttribute("aria-current","page"); else t.removeAttribute("aria-current"); }); window.scrollTo(0,0); }
+  tabs.forEach(function(t){ t.addEventListener("click",function(){ go(t.getAttribute("data-go")); }); });
+  var hv=location.hash.replace(/^#view-?/,""); go(hv==="report"||hv==="log"?hv:"today");
+  // minute bars behind the daily rows of the weekly report (display only; numbers come from app.js)
+  function bars(){ var t=document.querySelector("#rep-body table"); if(!t) return; var rows=[].slice.call(t.querySelectorAll("tbody tr")), mx=0;
+    rows.forEach(function(r){ var v=parseFloat(r.children[1]&&r.children[1].textContent)||0; if(v>mx) mx=v; });
+    rows.forEach(function(r){ var v=parseFloat(r.children[1]&&r.children[1].textContent)||0; r.classList.add("bar"); r.style.setProperty("--w", mx?Math.round(v/mx*100)+"%":"0%"); }); }
+  new MutationObserver(bars).observe(document.getElementById("rep-body"),{childList:true});
+  bars();
+})();
+</script>
+</body>
+</html>

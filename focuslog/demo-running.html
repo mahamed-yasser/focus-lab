@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0"><iframe id="f" src="index.html" width="480" height="1000" style="border:0"></iframe>
+<script>
+var f=document.getElementById("f");
+f.onload=function(){var w=f.contentWindow;w.localStorage.clear();f.onload=function(){var w=f.contentWindow,d=w.document;
+ d.getElementById("subject").value="تكامل";d.getElementById("goal").value="أحل 10 مسائل";d.getElementById("start").click();
+ var c=d.querySelectorAll(".chip");c[1].click();c[4].click();d.getElementById("park").value="فيديو صاحبي";d.getElementById("parkbtn").click();
+ setTimeout(function(){d.getElementById("stop").click()},300);};w.location.reload();};
+</script>

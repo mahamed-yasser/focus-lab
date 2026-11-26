@@ -1,0 +1,7 @@
+<!doctype html><meta charset="utf-8"><script>
+// Screenshot helper: DEMO data (not real use) dated relative to today, then opens the real page directly.
+var d=new Date(),p=function(n){return(n<10?"0":"")+n},k=function(o){var x=new Date(d.getTime()-o*864e5);return x.getFullYear()+"-"+p(x.getMonth()+1)+"-"+p(x.getDate())};
+var S=[[0,"09:00","تفاضل",30,28,1,["تيك توك"],5],[0,"20:30","فيزياء",45,40,4,["إنستجرام","تيك توك"],0],[1,"21:00","تفاضل",30,25,2,["واتساب"],12],[2,"10:00","كيمياء",40,35,0,[],0],[3,"16:00","فيزياء",45,45,3,["يوتيوب"],0]].map(function(a){return{date:k(a[0]),start:a[1],subject:a[2],condition:"",plannedMin:a[3],actualMin:a[4],unverifiedMin:a[7],distractions:a[5],triggers:a[6],goal:"",goalDone:false,parked:[],note:""}});
+localStorage.setItem("focuslog.sessions.v1",JSON.stringify({version:2,sessions:S}));
+localStorage.setItem("weekplan.targets.v1",JSON.stringify({"تفاضل":120,"فيزياء":150}));
+location.replace("index.html");</script>
