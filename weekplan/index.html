@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WeekPlan | خطة الأسبوع</title>
+<link rel="stylesheet" href="../theme.css">
+<style>
+  .bar{height:14px;background:#0a1424;border:1px solid var(--line);border-radius:7px;overflow:hidden;margin:8px 0}
+  .bar>div{height:100%;background:var(--acc)}
+  .warn{color:var(--warn)}
+  header.top a{color:var(--acc);font-weight:600;text-decoration:none}
+</style></head>
+<body><main>
+<header class="top"><h1>خطة الأسبوع <span class="mute">WeekPlan</span></h1><a href="../focuslog/index.html">← سجل التركيز</a></header>
+<div id="msg" class="card" role="status" aria-live="polite" hidden></div>
+<section class="card">
+  <h2>هدف الأسبوع</h2>
+  <div class="row">
+    <div><label for="sub">المادة</label><input id="sub" maxlength="40"></div>
+    <div><label for="min">دقائق في الأسبوع</label><input id="min" type="number" min="0" max="3000"></div>
+  </div>
+  <p><button id="add">أضف / عدّل الهدف</button></p>
+  <label for="ws">بداية الأسبوع</label>
+  <select id="ws"><option value="6">السبت</option><option value="0">الأحد</option><option value="1">الاثنين</option></select>
+</section>
+<section class="card"><div id="out"></div><p class="warn" id="note"></p></section>
+<section class="card">
+  <p class="mute">البيانات من FocusLog لو الصفحتين على نفس الموقع، أو استورد ملف CSV صدّرته منه.</p>
+  <button class="sec" id="import">استيراد CSV</button><input type="file" id="file" accept=".csv,text/csv" hidden>
+</section>
+</main>
+<script src="../focuslog/core.js"></script>
+<script src="plan.js"></script>
+<script src="app.js"></script>
+</body></html>

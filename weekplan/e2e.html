@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><body><pre id="result">pending</pre><iframe id="f" src="index.html" width="500" height="800"></iframe>
+<script>
+var R=[];function ok(n,c){R.push((c?"PASS ":"FAIL ")+n)}
+function wait(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function load(fr){return new Promise(function(res){fr.onload=function(){res(fr.contentWindow)};fr.contentWindow.location.reload()})}
+(async function(){try{
+ var f=document.getElementById("f"),w=await load(f);w.localStorage.clear();w=await load(f);
+ var d=new Date(),k=function(x){return x.getFullYear()+"-"+("0"+(x.getMonth()+1)).slice(-2)+"-"+("0"+x.getDate()).slice(-2)};
+ var csv="date,start,subject,planned_min,actual_min,distractions\n"+k(d)+",10:00,فيزياء,50,50,1\n";
+ // call the page's import handler path with a File via DataTransfer
+ var dt=new w.DataTransfer();dt.items.add(new w.File([csv],"x.csv",{type:"text/csv"}));
+ var inp=w.document.getElementById("file");inp.files=dt.files;inp.dispatchEvent(new w.Event("change"));
+ await wait(300);
+ w.document.getElementById("sub").value="فيزياء";w.document.getElementById("min").value="300";w.document.getElementById("add").click();
+ ok("import shows progress",w.document.getElementById("out").textContent.indexOf("50 / 300")>=0);
+ w=await load(f);
+ ok("imported sessions survive reload",w.document.getElementById("out").textContent.indexOf("50 / 300")>=0);
+ // importing the same file again does not double count
+ dt=new w.DataTransfer();dt.items.add(new w.File([csv],"x.csv",{type:"text/csv"}));inp=w.document.getElementById("file");inp.files=dt.files;inp.dispatchEvent(new w.Event("change"));await wait(300);
+ ok("same file again is not double counted",w.document.getElementById("out").textContent.indexOf("50 / 300")>=0);
+ document.getElementById("result").textContent=R.join("\n");
+}catch(e){document.getElementById("result").textContent="ERROR "+e+"\n"+R.join("\n")}})();
+</script>
